@@ -231,7 +231,7 @@ Pull requests are welcome. For major changes, please open an issue first to disc
 
 **Md Asif**  
 B.Tech CSE   
-[GitHub](https://github.com/yourusername) · [LinkedIn](https://linkedin.com/in/yourprofile)
+[GitHub](https://github.com/MD-1-9/PDFMIND.git) · [LinkedIn]([https://linkedin.com/in/yourprofile](https://www.linkedin.com/in/md-asif-449b11348)
 
 ---
 
