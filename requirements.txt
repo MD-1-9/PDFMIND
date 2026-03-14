@@ -1,0 +1,8 @@
+streamlit>=1.52
+chromadb>=1.4
+sentence-transformers>=5.0
+torch>=2.0
+unstructured>=0.20
+pdfminer.six
+pypdf
+requests>=2.30
