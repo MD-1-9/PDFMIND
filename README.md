@@ -3,7 +3,6 @@
 > A local, privacy-first RAG (Retrieval-Augmented Generation) system for intelligent PDF question answering and multi-mode document summarization — powered by semantic embeddings, vector search, and a dual-memory conversational engine.
 
 ---
-
 ## 🚀 Demo
 
 ```
@@ -22,12 +21,12 @@ Upload any PDF → Ask questions in natural language → Get cited, context-awar
 
 Most PDF chatbots forget what you asked 3 messages ago. This one doesn't.
 
-This project implements a **dual-memory architecture** — a design pattern borrowed from cognitive science:
+PDFMIND implements a **dual-memory architecture** — a design pattern borrowed from cognitive science:
 
 | Memory Type | Role |
 |---|---|
 | **Short-Term Memory (STM)** | Last 2 Q&A pairs, used to augment retrieval queries |
-| **Long-Term Memory (LTM)** | Structured compression of full conversation history |
+| **Long-Term Memory (LTM)** | Structured compression of the full conversation history |
 
 The LTM is periodically updated using the LLM itself — compressing topics, key definitions, entities, numerical values, and open questions into a structured bullet format. This means the assistant maintains context across long conversations without bloating the prompt window.
 
@@ -38,7 +37,7 @@ The LTM is periodically updated using the LLM itself — compressing topics, key
 - 📥 **PDF Ingestion** — Extracts clean, page-wise text using `unstructured`, filtering out headers, footers, and page numbers
 - ✂️ **Smart Chunking** — Separator-aware overlapping chunker that respects paragraph and sentence boundaries
 - 🔍 **Semantic Search** — Dense vector retrieval using `all-MiniLM-L6-v2` (384-dim embeddings) + ChromaDB
-- 💬 **Conversational QA** — Context-aware Q&A with page-level source citations
+- 💬 **Conversational Q&A** — Context-aware answers with page-level source citations
 - 🧠 **Dual Memory Engine** — STM for retrieval augmentation, LTM for structured conversation compression
 - 📋 **Recursive Summarization** — 3-stage pipeline: chunk summaries → recursive reduction → structured final output
 - ⚡ **Two Summary Modes** — Fast (overview) and Deep (concept-dense) summarization
@@ -68,13 +67,13 @@ The LTM is periodically updated using the LLM itself — compressing topics, key
                │                             │
                └─────────────┬───────────────┘
                              │
-               ┌─────────────▼─────────────────┐
-               │          CORE UTILITIES        │
-               ├────────────────────────────────┤
-               │ PDF Loader   (unstructured)    │
-               │ Chunker      (overlapping)     │
-               │ Embeddings   (MiniLM-L6-v2)    │
-               └─────────────┬──────────────────┘
+               ┌─────────────▼──────────────────┐
+               │          CORE UTILITIES         │
+               ├─────────────────────────────────┤
+               │ PDF Loader   (unstructured)     │
+               │ Chunker      (overlapping)      │
+               │ Embeddings   (MiniLM-L6-v2)     │
+               └─────────────┬───────────────────┘
                              │
            ┌─────────────────┴─────────────────┐
            │                                   │
@@ -86,27 +85,31 @@ The LTM is periodically updated using the LLM itself — compressing topics, key
    │ Vector Store  │                   │ Local REST API│
    └───────────────┘                   └───────────────┘
 ```
-1. Conversational RAG with Dual-Memory
-This flow shows how STM augments your query to maintain conversational thread, and how LTM provides condensed context to the final generation.
+
+---
+
+## 🔄 RAG Pipeline — Conversational Q&A with Dual Memory
+
+```
          ┌────────────┐
          │ User Query │
          └─────┬──────┘
                │
                ▼
      ┌──────────────────┐
-     │   STM Augment    │ (Injects last 2 
-     │ (Chat History)   │  Q/A pairs)
+     │   STM Augment    │  Injects last 2 Q/A pairs
+     │  (Chat History)  │  for context-aware retrieval
      └─────────┬────────┘
                │
        ┌───────┴───────┐       ┌──────────────┐       ┌──────────────┐
-       │ Amended Query │──────▶│  Embedding   │──────▶│ Vector Store │
-       └───────────────┘       │    Model     │       │(Sem. Search) │
-                               └──────────────┘       └──────┬───────┘
+       │ Augmented     │──────▶│  Embedding   │──────▶│ Vector Store │
+       │    Query      │       │    Model     │       │(Sem. Search) │
+       └───────────────┘       └──────────────┘       └──────┬───────┘
                                                              │
                                                              ▼
                                                       ┌──────────────┐
-                                                      │    Top-K     │
-                                                      │Relevant Chunks│
+                                                      │    Top-6     │
+                                                      │   Chunks     │
                                                       └──────┬───────┘
                                                              │
                                                              ▼
@@ -119,50 +122,59 @@ This flow shows how STM augments your query to maintain conversational thread, a
                                                          ▼
                                                    ┌───────────┐
                                                    │    LLM    │
-                                                   │(Mistral 7B)│
+                                                   │(Mistral 7B│
+                                                   │  Ollama)  │
                                                    └─────┬─────┘
                                                          │
                                                          ▼
-                                                   ┌───────────┐
-                                                   │ Generated │
-                                                   │  Answer   │
-                                                   └───────────┘
+                                                ┌─────────────────┐
+                                                │ Answer + Sources│
+                                                │  (Page numbers) │
+                                                └─────────────────┘
+```
 
+---
 
+## 📋 Summarization Pipeline — Recursive Multi-Stage
 
-2. Recursive Summarization Engine
-For large documents that exceed the LLM context window, PDFMIND uses a multi-stage reduction process to synthesize information without loss of key concepts.
+```
        ┌───────────┐
        │  PDF File │
        └─────┬─────┘
              ▼
-┌──────────────────────────┐
-│      Load & Chunk PDF    │
-│ (28k chars / 18k chars)  │
-└────────────┬─────────────┘
-             ▼
-┌──────────────────────────┐
-│ Chunk-level Summarization│ (Stage 1)
-│ (Independent LLM passes) │
-└────────────┬─────────────┘
-             ▼
+  ┌──────────────────────────┐
+  │      Load & Chunk PDF    │
+  │  Fast: 28k chars/chunk   │
+  │  Deep: 18k chars/chunk   │
+  └────────────┬─────────────┘
+               ▼
+  ┌──────────────────────────┐
+  │  Stage 1: Summarize each │
+  │  chunk independently     │
+  └────────────┬─────────────┘
+               ▼
   ┌─────┐ ┌─────┐ ┌─────┐     ┌─────┐
   │Sum 1│ │Sum 2│ │Sum 3│ ... │Sum N│
-  └─────┴─┴──┬──┴─┴─────┴─────┴─────┘
-             ▼
-┌──────────────────────────┐
-│    Recursive Reduction   │ (Stage 2)
-│ (Batched merge: 8 or 5)  │
-└────────────┬─────────────┘
-             ▼
-┌──────────────────────────┐
-│ Final Structured Summary │ (Stage 3)
-│ (Universal prompt/temp)  │
-└────────────┬─────────────┘
-             ▼
-    ┌──────────────────┐
-    │ Final Summary Out│
-    └──────────────────┘
+  └──┬──┴─┴──┬──┴─┴──┬──┴─────┴──┬──┘
+     └────────┴────────┴──────────┘
+               ▼
+  ┌──────────────────────────┐
+  │  Stage 2: Recursive      │
+  │  Reduction               │
+  │  Fast: batches of 8      │
+  │  Deep: batches of 5      │
+  └────────────┬─────────────┘
+               ▼
+  ┌──────────────────────────┐
+  │  Stage 3: Final          │
+  │  Structured Summary      │
+  │  (Fast or Deep template) │
+  └────────────┬─────────────┘
+               ▼
+     ┌──────────────────┐
+     │  Summary Output  │
+     └──────────────────┘
+```
 
 ---
 
@@ -171,23 +183,24 @@ For large documents that exceed the LLM context window, PDFMIND uses a multi-sta
 ```
 PDFMIND/
 │
-├── app.py                    # Streamlit frontend
+├── app.py                     # Streamlit frontend
 │
 ├── core/
-│   ├── config.py 
-│   ├── pdf_loader.py         # PDF extraction & cleaning
-│   ├── chunker.py            # Overlapping text chunker
-│   ├── embeddings.py         # SentenceTransformer embeddings
-│   ├── vector_store.py       # ChromaDB vector store interface
-│   ├── rag_pipeline.py       # Core RAG engine + memory system
-│   └── summarize_full_pdf.py # Recursive summarization pipeline
+│   ├── __init__.py
+│   ├── config.py              # Central configuration (paths, model settings, constants)
+│   ├── pdf_loader.py          # PDF extraction and cleaning
+│   ├── chunker.py             # Overlapping text chunker
+│   ├── embeddings.py          # SentenceTransformer embeddings
+│   ├── vector_store.py        # ChromaDB vector store interface
+│   ├── rag_pipeline.py        # Core RAG engine + dual memory system
+│   └── summarize_full_pdf.py  # Recursive summarization pipeline
 │
 ├── data/
-│   ├── pdfs/                 # Uploaded PDFs (auto-created)
-│   └── chroma_db/            # Persistent vector database
+│   ├── pdfs/                  # Uploaded PDFs (auto-created)
+│   └── chroma_db/             # Persistent vector database
 │
 ├── models/
-│   └── all-MiniLM-L6-v2/    # Local embedding model
+│   └── all-MiniLM-L6-v2/     # Local embedding model
 │
 ├── requirements.txt
 └── README.md
@@ -206,8 +219,8 @@ PDFMIND/
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/pdf-research-assistant.git
-cd pdf-research-assistant
+git clone https://github.com/MD-1-9/PDFMIND.git
+cd PDFMIND
 ```
 
 ### 2. Install Dependencies
@@ -238,22 +251,20 @@ Open your browser at `http://localhost:8501`
 
 ---
 
-
-
 ## 💡 How It Works
 
 ### 1. PDF Processing
 When you upload a PDF, the system:
-- Extracts page-wise text using `unstructured`, stripping headers/footers
+- Extracts page-wise text using `unstructured`, stripping headers, footers, and page numbers
 - Splits text into overlapping chunks (600 chars, 100 char overlap) with separator-aware boundaries
-- Generates 384-dimensional dense embeddings for each chunk
-- Stores chunks + embeddings in a persistent ChromaDB collection
+- Generates 384-dimensional dense embeddings for each chunk using `all-MiniLM-L6-v2`
+- Stores chunks and embeddings in a persistent ChromaDB collection
 
 ### 2. Question Answering
 When you ask a question:
 1. Recent conversation (STM) is appended to your query for context-aware retrieval
-2. The augmented query is embedded and used to fetch top-6 most relevant chunks
-3. Retrieved chunks + LTM summary are injected into a strict RAG prompt
+2. The augmented query is embedded and used to fetch the top-6 most relevant chunks
+3. Retrieved chunks and the LTM summary are injected into a strict RAG prompt
 4. Mistral generates a 2–4 sentence answer grounded only in the document
 5. Source page numbers are appended to every answer
 
@@ -270,13 +281,13 @@ Two modes available:
 ## 🧪 Example Usage
 
 ```
-User: What is the main contribution of this paper?
-Assistant: The paper introduces a novel attention mechanism that reduces computational 
-           complexity from O(n²) to O(n log n) while maintaining model accuracy on 
+User:      What is the main contribution of this paper?
+Assistant: The paper introduces a novel attention mechanism that reduces computational
+           complexity from O(n²) to O(n log n) while maintaining model accuracy on
            standard NLP benchmarks. (Sources: Page 1, 2)
 
-User: What datasets did they use?
-Assistant: The authors evaluated their method on three benchmark datasets: GLUE, 
+User:      What datasets did they use?
+Assistant: The authors evaluated their method on three benchmark datasets: GLUE,
            SQuAD 2.0, and WMT-14 English-German translation task. (Sources: Page 4, 5)
 ```
 
@@ -294,7 +305,7 @@ Assistant: The authors evaluated their method on three benchmark datasets: GLUE,
 
 ## 🤝 Contributing
 
-Pull requests are welcome. For major changes, please open an issue first to discuss what you'd like to change.
+Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
 
 ---
 
@@ -307,9 +318,10 @@ Pull requests are welcome. For major changes, please open an issue first to disc
 ## 👤 Author
 
 **Md Asif**  
-B.Tech CSE   
-[GitHub](https://github.com/MD-1-9/PDFMIND.git) · [LinkedIn]([https://linkedin.com/in/yourprofile](https://www.linkedin.com/in/md-asif-449b11348)
+B.Tech CSE  
+[GitHub](https://github.com/MD-1-9/PDFMIND) · [LinkedIn](https://www.linkedin.com/in/md-asif-449b11348)
 
 ---
 
 > *"Built to understand documents the way humans do — with memory, context, and recall."*
+
